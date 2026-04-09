@@ -1,4 +1,4 @@
-package main
+package box
 
 import (
 	"image"
@@ -11,7 +11,7 @@ import (
 // LoadPNG decodes a PNG file and returns a flat pixel array (row-major),
 // the image width, height, and any error. Each pixel is the nearest
 // xterm-256 palette color. Fully transparent pixels map to ColorDefault.
-func LoadPNG(path string) (pixels []termbox.Attribute, width, hegith int) {
+func LoadPNG(path string) (pixels []termbox.Attribute, width, height int) {
 	var f, err = os.Open(path)
 	if err != nil {
 		return nil, 0, 0

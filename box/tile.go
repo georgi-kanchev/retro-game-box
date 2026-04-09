@@ -1,4 +1,4 @@
-package main
+package box
 
 import "github.com/nsf/termbox-go"
 
@@ -14,6 +14,9 @@ type Tile struct {
 	BG byte
 }
 
+var engineAtlas []termbox.Attribute
+var engineAtlasW int
+
 // tilePixels is a reusable scratch buffer for one tile's pixel data.
 var tilePixels [TileSize * TileSize]termbox.Attribute
 
@@ -23,8 +26,7 @@ var tileGrid []Tile
 var tileGridW int
 
 // InitTileGrid sizes the tile grid to match the current terminal dimensions.
-// Call on startup and after every resize. Reuses the existing allocation if
-// capacity allows; only allocates when the terminal has grown beyond it.
+// Call on startup and after every resize.
 func InitTileGrid(mode RenderMode) {
 	var tw, th = termbox.Size()
 	var tcw, tch = cellSize(mode)
@@ -40,17 +42,15 @@ func InitTileGrid(mode RenderMode) {
 }
 
 // SetTile blits tile t from the atlas at tile grid position (col, row).
-// Atlas tiles are row-major, packed at TileSize×TileSize with no spacing.
-// Lit atlas pixels (non-ColorDefault) are drawn with color; dark pixels are transparent.
-func SetTile(col, row int, t Tile, mode RenderMode, atlas []termbox.Attribute, atlasW int) {
-	var tcw, tch = cellSize(mode)
-	var tilesPerRow = atlasW / TileSize
+func SetTile(col, row int, t Tile) {
+	var tcw, tch = cellSize(engineMode)
+	var tilesPerRow = engineAtlasW / TileSize
 	var srcX = (t.ID % tilesPerRow) * TileSize
 	var srcY = (t.ID / tilesPerRow) * TileSize
 
 	for y := range TileSize {
 		for x := range TileSize {
-			if atlas[(srcY+y)*atlasW+(srcX+x)] != termbox.ColorDefault {
+			if engineAtlas[(srcY+y)*engineAtlasW+(srcX+x)] != termbox.ColorDefault {
 				tilePixels[y*TileSize+x] = termbox.Attribute(t.FG)
 			} else {
 				tilePixels[y*TileSize+x] = termbox.ColorDefault
@@ -58,7 +58,7 @@ func SetTile(col, row int, t Tile, mode RenderMode, atlas []termbox.Attribute, a
 		}
 	}
 
-	renderMode(mode, tilePixels[:], TileSize, TileSize, col*tcw, row*tch, termbox.Attribute(t.BG))
+	renderMode(engineMode, tilePixels[:], TileSize, TileSize, col*tcw, row*tch, termbox.Attribute(t.BG))
 
 	var idx = row*tileGridW + col
 	if idx >= 0 && idx < len(tileGrid) {
@@ -76,8 +76,8 @@ func GetTile(col, row int) Tile {
 }
 
 // ClearTile erases the tile at (col, row).
-func ClearTile(col, row int, mode RenderMode) {
-	var tcw, tch = cellSize(mode)
+func ClearTile(col, row int) {
+	var tcw, tch = cellSize(engineMode)
 	for cy := range tch {
 		for cx := range tcw {
 			termbox.SetCell(col*tcw+cx, row*tch+cy, ' ', termbox.ColorDefault, termbox.ColorDefault)

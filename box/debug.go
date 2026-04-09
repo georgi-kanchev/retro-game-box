@@ -1,4 +1,4 @@
-package main
+package box
 
 import (
 	"runtime"
@@ -6,60 +6,63 @@ import (
 	"time"
 )
 
-var debugBuf [4096]byte
-var fpsBuf [64]byte
+var memStats runtime.MemStats
+var statsCacheBuf [4096]byte
+var statsCache []byte
+var lastStatsRefresh time.Time
 
-func appendFPS(buf []byte, fps int) []byte {
-	buf = append(buf, "FPS: "...)
-	return strconv.AppendInt(buf, int64(fps), 10)
+// WriteMemoryUsage returns a formatted memory statistics report.
+// The report is cached and refreshed at most once per second.
+func WriteMemoryUsage() []byte {
+	if time.Since(lastStatsRefresh) < time.Second {
+		return statsCache
+	}
+	runtime.ReadMemStats(&memStats)
+	lastStatsRefresh = time.Now()
+	statsCache = formatMemoryUsage(statsCacheBuf[:0])
+	return statsCache
 }
 
-func appendTPS(buf []byte, tps int) []byte {
-	buf = append(buf, "TPS: "...)
-	return strconv.AppendInt(buf, int64(tps), 10)
-}
-
-func writeMemoryUsage(buf []byte) []byte {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
+func formatMemoryUsage(buf []byte) []byte {
+	var m = &memStats
 
 	buf = append(buf, "Memory:\n"...)
 	buf = append(buf, "  UsedNow   = "...)
-	buf = appendByteSize(buf, int(m.Alloc))
+	buf = AppendByteSize(buf, int(m.Alloc))
 	buf = append(buf, " (current heap in use)\n"...)
 	buf = append(buf, "  UsedTotal = "...)
-	buf = appendByteSize(buf, int(m.TotalAlloc))
+	buf = AppendByteSize(buf, int(m.TotalAlloc))
 	buf = append(buf, " (total allocated since start)\n"...)
 	buf = append(buf, "  FromOS    = "...)
-	buf = appendByteSize(buf, int(m.Sys))
+	buf = AppendByteSize(buf, int(m.Sys))
 	buf = append(buf, " (memory reserved from OS)\n"...)
 
 	buf = append(buf, "\nHeap:\n"...)
 	buf = append(buf, "  Used      = "...)
-	buf = appendByteSize(buf, int(m.HeapAlloc))
+	buf = AppendByteSize(buf, int(m.HeapAlloc))
 	buf = append(buf, '\n')
 	buf = append(buf, "  Reserved  = "...)
-	buf = appendByteSize(buf, int(m.HeapSys))
+	buf = AppendByteSize(buf, int(m.HeapSys))
 	buf = append(buf, '\n')
 	buf = append(buf, "  Idle      = "...)
-	buf = appendByteSize(buf, int(m.HeapIdle))
+	buf = AppendByteSize(buf, int(m.HeapIdle))
 	buf = append(buf, " (not used but still reserved)\n"...)
 	buf = append(buf, "  Active    = "...)
-	buf = appendByteSize(buf, int(m.HeapInuse))
+	buf = AppendByteSize(buf, int(m.HeapInuse))
 	buf = append(buf, " (actively in use)\n"...)
 	buf = append(buf, "  Released  = "...)
-	buf = appendByteSize(buf, int(m.HeapReleased))
+	buf = AppendByteSize(buf, int(m.HeapReleased))
 	buf = append(buf, " (given back to OS)\n"...)
 
 	buf = append(buf, "\nStack:\n"...)
 	buf = append(buf, "  Used      = "...)
-	buf = appendByteSize(buf, int(m.StackInuse))
+	buf = AppendByteSize(buf, int(m.StackInuse))
 	buf = append(buf, '\n')
 	buf = append(buf, "  Reserved  = "...)
-	buf = appendByteSize(buf, int(m.StackSys))
+	buf = AppendByteSize(buf, int(m.StackSys))
 	buf = append(buf, '\n')
 	buf = append(buf, "  Other     = "...)
-	buf = appendByteSize(buf, int(m.OtherSys))
+	buf = AppendByteSize(buf, int(m.OtherSys))
 	buf = append(buf, " (misc runtime overhead)\n"...)
 
 	buf = append(buf, "\nObjects:\n"...)
@@ -81,7 +84,7 @@ func writeMemoryUsage(buf []byte) []byte {
 	buf = strconv.AppendUint(buf, uint64(m.NumForcedGC), 10)
 	buf = append(buf, " (manual triggers)\n"...)
 	buf = append(buf, "  Next      = "...)
-	buf = appendByteSize(buf, int(m.NextGC))
+	buf = AppendByteSize(buf, int(m.NextGC))
 	buf = append(buf, " (target heap size of next GC)\n"...)
 	buf = append(buf, "  PauseTotal= "...)
 	buf = strconv.AppendFloat(buf, float64(m.PauseTotalNs)/1e9, 'f', 2, 64)
@@ -97,7 +100,29 @@ func writeMemoryUsage(buf []byte) []byte {
 	return buf
 }
 
-func appendByteSize(buf []byte, n int) []byte {
+// AppendFPS appends "FPS: <n>" to buf.
+func AppendFPS(buf []byte, fps int) []byte {
+	buf = append(buf, "FPS: "...)
+	return strconv.AppendInt(buf, int64(fps), 10)
+}
+
+// AppendIdleTPS spins until the current tick budget is exhausted, then appends
+// "Idle: <n>" to buf. This call is what enforces the target TPS rate — if it is
+// not called, Running() loops as fast as possible.
+func AppendIdleTPS(buf []byte) []byte {
+	for idling() {}
+	buf = append(buf, "Idle: "...)
+	return appendSeparateThousands(buf, uint64(CurrentIdleTPS))
+}
+
+// AppendTPS appends "TPS: <n>" to buf.
+func AppendTPS(buf []byte, tps int) []byte {
+	buf = append(buf, "TPS: "...)
+	return strconv.AppendInt(buf, int64(tps), 10)
+}
+
+// AppendByteSize appends a human-readable byte size (e.g. "1.500 KB") to buf.
+func AppendByteSize(buf []byte, n int) []byte {
 	const unit = 1024
 	if n < unit {
 		buf = strconv.AppendInt(buf, int64(n), 10)

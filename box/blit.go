@@ -1,4 +1,4 @@
-package main
+package box
 
 import "github.com/nsf/termbox-go"
 
@@ -205,7 +205,7 @@ func BlitQuarter(pixels []termbox.Attribute, width, height, offX, offY int, bg t
 			var fg = termbox.ColorDefault
 			for row := range 2 {
 				for col := range 2 {
-					var x, y = px+col, py+row
+					var x, y = px + col, py + row
 					if x >= width || y >= height {
 						continue
 					}
