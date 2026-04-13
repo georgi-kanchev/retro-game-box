@@ -9,16 +9,19 @@ import (
 var memStats runtime.MemStats
 var statsCacheBuf [4096]byte
 var statsCache []byte
-var lastStatsRefresh time.Time
+var lastStatsRefresh int64
+var statsBuf [64]byte
 
 // WriteMemoryUsage returns a formatted memory statistics report.
 // The report is cached and refreshed at most once per second.
 func WriteMemoryUsage() []byte {
-	if time.Since(lastStatsRefresh) < time.Second {
+	now := time.Now().Unix()
+	if now-lastStatsRefresh < 1 { // 1 second threshold
 		return statsCache
 	}
+
 	runtime.ReadMemStats(&memStats)
-	lastStatsRefresh = time.Now()
+	lastStatsRefresh = now
 	statsCache = formatMemoryUsage(statsCacheBuf[:0])
 	return statsCache
 }
@@ -87,32 +90,37 @@ func formatMemoryUsage(buf []byte) []byte {
 	buf = AppendByteSize(buf, int(m.NextGC))
 	buf = append(buf, " (target heap size of next GC)\n"...)
 	buf = append(buf, "  PauseTotal= "...)
-	buf = strconv.AppendFloat(buf, float64(m.PauseTotalNs)/1e9, 'f', 2, 64)
+	// m.PauseTotalNs is total nanoseconds. To get seconds with 2 decimals:
+	// (total / 1,000,000,000) * 100 / 100 => total / 10,000,000
+	// We do this to avoid floating point math entirely.
+	totalPauseSec100 := int64(m.PauseTotalNs / 10000000)
+	buf = appendFixedPoint(buf, totalPauseSec100)
 	buf = append(buf, " s (total time in GC)\n"...)
 	if m.LastGC == 0 {
 		buf = append(buf, "  SinceLast = never\n"...)
 	} else {
 		buf = append(buf, "  SinceLast = "...)
-		buf = strconv.AppendFloat(buf, time.Since(time.Unix(0, int64(m.LastGC))).Seconds(), 'f', 2, 64)
+		nowNano := time.Now().UnixNano()
+		// Calculate seconds * 100 using integer math
+		diffSec100 := (nowNano - int64(m.LastGC)) / 10000000
+		buf = appendFixedPoint(buf, diffSec100)
 		buf = append(buf, " s\n"...)
 	}
 
 	return buf
 }
 
+// WriteStats returns a formatted "FPS: N  TPS: N" line using a package-level buffer.
+func WriteStats() []byte {
+	var b = AppendFPS(statsBuf[:0], CurrentFPS)
+	b = append(b, "  "...)
+	return AppendTPS(b, CurrentTPS)
+}
+
 // AppendFPS appends "FPS: <n>" to buf.
 func AppendFPS(buf []byte, fps int) []byte {
 	buf = append(buf, "FPS: "...)
 	return strconv.AppendInt(buf, int64(fps), 10)
-}
-
-// AppendIdleTPS spins until the current tick budget is exhausted, then appends
-// "Idle: <n>" to buf. This call is what enforces the target TPS rate — if it is
-// not called, Running() loops as fast as possible.
-func AppendIdleTPS(buf []byte) []byte {
-	for idling() {}
-	buf = append(buf, "Idle: "...)
-	return appendSeparateThousands(buf, uint64(CurrentIdleTPS))
 }
 
 // AppendTPS appends "TPS: <n>" to buf.
@@ -122,18 +130,43 @@ func AppendTPS(buf []byte, tps int) []byte {
 }
 
 // AppendByteSize appends a human-readable byte size (e.g. "1.500 KB") to buf.
+// Optimized for zero-allocations and avoids floating point math.
 func AppendByteSize(buf []byte, n int) []byte {
 	const unit = 1024
 	if n < unit {
 		buf = strconv.AppendInt(buf, int64(n), 10)
 		return append(buf, " B"...)
 	}
-	var div, exp = int(unit), 0
+
+	var exp = 0
+	var divisor int64 = 1
+	// Find the appropriate unit (K, M, G, etc.)
 	for v := n / unit; v >= unit; v /= unit {
-		div *= unit
+		divisor *= unit
 		exp++
 	}
-	buf = strconv.AppendFloat(buf, float64(n)/float64(div), 'f', 3, 64)
+	// We need one more multiplication because the loop stops early
+	divisor *= unit
+
+	// Calculate whole and fractional parts (3 decimal places)
+	// Example: 1536 bytes -> 1.500 KB
+	// whole = 1536 / 1024 = 1
+	// fraction = (1536 % 1024) * 1000 / 1024 = 500
+	whole := int64(n) / divisor
+	fraction := (int64(n) % divisor) * 1000 / divisor
+
+	buf = strconv.AppendInt(buf, whole, 10)
+	buf = append(buf, '.')
+
+	// Ensure leading zeros in fraction (e.g., .005 instead of .5)
+	if fraction < 100 {
+		buf = append(buf, '0')
+	}
+	if fraction < 10 {
+		buf = append(buf, '0')
+	}
+
+	buf = strconv.AppendInt(buf, fraction, 10)
 	buf = append(buf, ' ')
 	buf = append(buf, "KMGTPE"[exp])
 	return append(buf, 'B')
@@ -150,4 +183,18 @@ func appendSeparateThousands(buf []byte, n uint64) []byte {
 		buf = append(buf, c)
 	}
 	return buf
+}
+
+// appendFixedPoint takes a value representing (seconds * 100)
+// and appends it to buf as "seconds.hundredths"
+func appendFixedPoint(buf []byte, v100 int64) []byte {
+	whole := v100 / 100
+	frac := v100 % 100
+
+	buf = strconv.AppendInt(buf, whole, 10)
+	buf = append(buf, '.')
+	if frac < 10 {
+		buf = append(buf, '0') // Leading zero for .05 vs .5
+	}
+	return strconv.AppendInt(buf, frac, 10)
 }
