@@ -4,7 +4,7 @@ import "github.com/nsf/termbox-go"
 
 // TileSize is the pixel width and height of each tile.
 // 12 divides evenly by all supported cell grids: 1, 2, 3, and 4.
-const TileSize = 12
+const TileSize = 16
 
 // Tile identifies a sprite and its colors.
 // ID is the 1D index of the tile in the atlas (row-major, zero-based).
