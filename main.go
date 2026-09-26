@@ -10,7 +10,7 @@ import (
 var lastRedraw = time.Now()
 
 func main() {
-	box.Run(16, 16, 60, "atlas2.png", update)
+	box.Run(12, 12, 60, "atlas.png", update)
 }
 
 func update() {

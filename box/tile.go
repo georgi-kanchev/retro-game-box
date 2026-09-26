@@ -27,9 +27,9 @@ var tileGrid []Tile
 var tileGridW int
 
 // cellsPerTile returns the terminal cells a tile occupies on each axis.
-// Braille packs 2×4 pixels into each cell.
+// Half blocks pack 1×2 pixels into each cell.
 func cellsPerTile() (tcw, tch int) {
-	return (engineTileW + 1) / 2, (engineTileH + 3) / 4
+	return engineTileW, (engineTileH + 1) / 2
 }
 
 // InitTileGrid sizes the tile grid to match the current terminal dimensions.
@@ -75,7 +75,7 @@ func SetTile(col, row int, t Tile) {
 		}
 	}
 
-	BlitBraille(tilePixels, engineTileW, engineTileH, col*tcw, row*tch, termbox.Attribute(t.BG))
+	BlitHalf(tilePixels, engineTileW, engineTileH, col*tcw, row*tch, termbox.Attribute(t.BG))
 
 	var idx = row*tileGridW + col
 	if idx >= 0 && idx < len(tileGrid) {
