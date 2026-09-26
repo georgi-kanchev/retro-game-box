@@ -13,7 +13,6 @@ var CurrentTPS int
 // CurrentFPS is the measured frames drawn per second from the last completed second.
 var CurrentFPS int
 
-var engineMode RenderMode
 var dirty bool
 var quit bool
 var interval time.Duration
@@ -32,7 +31,12 @@ func Quit() {
 }
 
 // Run starts the engine and blocks until completion.
-func Run(mode RenderMode, tps int, atlasPath string, update func()) {
+// tileW and tileH are the pixel dimensions of each tile in the atlas.
+func Run(tileW, tileH, tps int, atlasPath string, update func()) {
+	if tileW <= 0 || tileH <= 0 {
+		fmt.Println("box: tile size must be positive")
+		return
+	}
 	if err := termbox.Init(); err != nil {
 		fmt.Println(err)
 		return
@@ -42,9 +46,10 @@ func Run(mode RenderMode, tps int, atlasPath string, update func()) {
 	termbox.SetInputMode(termbox.InputMouse)
 	termbox.SetOutputMode(termbox.Output256)
 
-	engineMode = mode
+	engineTileW = tileW
+	engineTileH = tileH
 	engineAtlas, engineAtlasW, _ = LoadPNG(atlasPath)
-	InitTileGrid(mode)
+	InitTileGrid()
 
 	interval = time.Second / time.Duration(tps)
 	ticker := time.NewTicker(interval)
@@ -94,7 +99,7 @@ func drainEvents() {
 		select {
 		case ev := <-eventQueue:
 			if ev.Type == termbox.EventResize {
-				InitTileGrid(engineMode)
+				InitTileGrid()
 				dirty = true
 			}
 			processEvent(ev)
