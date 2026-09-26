@@ -1,28 +1,27 @@
 package input
 
-type Input int16
+type Button uint16 // Mouse button.
+type Key uint16    // Keyboard key.
 
 const (
-	None Input = iota
+	None Button = iota
 
 	MouseLeft
 	MouseRight
 	MouseMiddle
-	MouseWheelUp
-	MouseWheelDown
 )
 const (
-	Backspace = 8
-	Tab       = 9
-	Enter     = 13
-	Escape    = 27
-	Shift     = 28
-	Control   = 29
-	Alt       = 30
+	Backspace Key = 8
+	Tab       Key = 9
+	Enter     Key = 13
+	Escape    Key = 27
+	Shift     Key = 28
+	Control   Key = 29
+	Alt       Key = 30
 )
 
 const (
-	Space Input = iota + 32
+	Space Key = iota + 32
 	ExclamationMark
 	DoubleQuote
 	Hash
@@ -119,13 +118,13 @@ const (
 	Tilde
 )
 const (
-	UpArrow Input = iota + 257
+	UpArrow Key = iota + 257
 	DownArrow
 	RightArrow
 	LeftArrow
 )
 const (
-	PageUp Input = iota + 266
+	PageUp Key = iota + 266
 	PageDn
 	Home
 	End
@@ -152,7 +151,7 @@ const (
 	F12
 )
 const (
-	Menu Input = iota + 343
+	Menu Key = iota + 343
 	CapsLock
 	ScrollLock
 	NumLock

@@ -22,7 +22,7 @@ func update() {
 
 	if time.Since(lastRedraw) >= time.Second {
 		lastRedraw = time.Now()
-		box.Dirty()
+		// box.Dirty()
 	}
 
 	for y := range 9 {
@@ -31,8 +31,11 @@ func update() {
 		}
 	}
 
-	if box.InputIsJustPressedAndHeld(input.Backtab) {
+	if box.KeyIsJustPressedAndHeld(input.LowercaseA) {
 		box.PlaySound(sound)
+	}
+	if box.MouseIsPressed(input.MouseLeft) {
+		print("d\n")
 	}
 
 	box.SetTile(1, 1, box.Tile{ID: 25, FG: 2, BG: 22})

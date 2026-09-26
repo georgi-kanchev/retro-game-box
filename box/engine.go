@@ -97,7 +97,7 @@ func Run(tileW, tileH, tps int, atlasPath string, update func()) {
 		now := time.Now()
 		ticks++
 
-		resetInput()
+		clearInput()
 		drainEvents()
 
 		// Logic update
