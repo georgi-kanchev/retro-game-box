@@ -14,8 +14,8 @@ const sampleRate = beep.SampleRate(44100)
 var music *beep.Ctrl
 var speakerReady bool
 
-// Sound holds a decoded MP3 stream ready for playback.
-type Sound struct {
+// Audio holds a decoded MP3 stream ready for playback.
+type Audio struct {
 	stream beep.StreamSeekCloser
 	format beep.Format
 }
@@ -29,7 +29,7 @@ func ensureSpeaker() {
 }
 
 // LoadSound opens and decodes an MP3 file.
-func LoadSound(path string) (*Sound, error) {
+func LoadSound(path string) (*Audio, error) {
 	var f, err = os.Open(path)
 	if err != nil {
 		return nil, err
@@ -39,10 +39,10 @@ func LoadSound(path string) (*Sound, error) {
 		f.Close()
 		return nil, decodeErr
 	}
-	return &Sound{stream, format}, nil
+	return &Audio{stream, format}, nil
 }
 
-func (s *Sound) resample(inner beep.Streamer) beep.Streamer {
+func (s *Audio) resample(inner beep.Streamer) beep.Streamer {
 	if s.format.SampleRate == sampleRate {
 		return inner
 	}
@@ -50,18 +50,19 @@ func (s *Sound) resample(inner beep.Streamer) beep.Streamer {
 }
 
 // PlaySound plays s once from the beginning, non-blocking.
-func PlaySound(s *Sound) {
+func PlaySound(a *Audio) {
 	ensureSpeaker()
-	s.stream.Seek(0)
-	speaker.Play(s.resample(s.stream))
+	a.stream.Seek(0)
+	speaker.Play(a.resample(a.stream))
 }
 
 // PlayMusic plays s in an infinite loop, replacing any currently playing music.
-func PlayMusic(s *Sound) {
+func PlayMusic(a *Audio) {
 	ensureSpeaker()
 	StopMusic()
-	s.stream.Seek(0)
-	var ctrl = &beep.Ctrl{Streamer: s.resample(beep.Loop(-1, s.stream))}
+	a.stream.Seek(0)
+	var loop, _ = beep.Loop2(a.stream)
+	var ctrl = &beep.Ctrl{Streamer: a.resample(loop)}
 	speaker.Lock()
 	music = ctrl
 	speaker.Unlock()
