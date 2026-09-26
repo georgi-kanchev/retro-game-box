@@ -57,7 +57,7 @@ func processEvent(ev tcell.Event) {
 }
 
 // Handles keyboard & mouse. Accepts runes.
-func InputJustPressed(input input.Input) bool {
+func InputIsJustPressedAndHeld(input input.Input) bool {
 	for _, i := range currentInput {
 		if i == input {
 			return true

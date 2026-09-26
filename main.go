@@ -31,7 +31,7 @@ func update() {
 		}
 	}
 
-	if box.InputJustPressed(input.Control) {
+	if box.InputIsJustPressedAndHeld(input.Backtab) {
 		box.PlaySound(sound)
 	}
 
