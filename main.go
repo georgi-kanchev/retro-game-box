@@ -10,7 +10,7 @@ import (
 var lastRedraw = time.Now()
 
 func main() {
-	box.Run(12, 12, 60, "atlas.png", update)
+	box.Run(16, 16, 60, "atlas2.png", update)
 }
 
 func update() {
@@ -28,10 +28,11 @@ func update() {
 			box.SetTile(x, y, box.Tile{ID: 23, FG: 8, BG: 17})
 		}
 	}
-	box.SetTile(1, 1, box.Tile{ID: 25, FG: 2, BG: 20})
-	box.SetTile(0, 2, box.Tile{ID: 26, FG: 3, BG: 20})
-	box.SetTile(1, 2, box.Tile{ID: 27, FG: 4, BG: 20})
+	box.SetTile(1, 1, box.Tile{ID: 25, FG: 2, BG: 22})
+	box.SetTile(0, 2, box.Tile{ID: 26, FG: 3, BG: 23})
+	box.SetTile(1, 2, box.Tile{ID: 27, FG: 4, BG: 24})
 
 	box.DrawString(0, 0, termbox.ColorWhite, termbox.ColorBlack, box.WriteStats())
+	box.DrawString(0, 1, termbox.ColorWhite|termbox.AttrBold, termbox.ColorBlack, box.WriteStats())
 	//box.DrawString(0, 1, termbox.ColorWhite, termbox.ColorBlack, box.WriteMemoryUsage())
 }
