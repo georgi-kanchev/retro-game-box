@@ -26,7 +26,7 @@ func update() {
 
 	for y := range 9 {
 		for x := range 16 {
-			box.SetTile(x, y, box.Tile{ID: 23, FG: 8, BG: 17})
+			box.SetTile(x, y, box.Tile{ID: 23, FG: 8, BG: 18})
 		}
 	}
 	box.SetTile(1, 1, box.Tile{ID: 25, FG: 2, BG: 22})
