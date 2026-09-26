@@ -1,16 +1,21 @@
 module retro-game-box
 
-go 1.26.1
-
-require github.com/nsf/termbox-go v1.1.1
+go 1.27.1
 
 require (
-	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
+	github.com/gdamore/tcell/v2 v2.13.10
+	github.com/gopxl/beep/v2 v2.1.1
+)
+
+require (
 	github.com/ebitengine/oto/v3 v3.3.2 // indirect
 	github.com/ebitengine/purego v0.8.0 // indirect
-	github.com/gopxl/beep/v2 v2.1.1
+	github.com/gdamore/encoding v1.0.1 // indirect
 	github.com/hajimehoshi/go-mp3 v0.3.4 // indirect
-	github.com/mattn/go-runewidth v0.0.22 // indirect
+	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	golang.org/x/sys v0.25.0 // indirect
+	github.com/rivo/uniseg v0.4.7 // indirect
+	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/term v0.37.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
 )

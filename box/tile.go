@@ -1,6 +1,6 @@
 package box
 
-import "github.com/nsf/termbox-go"
+import "github.com/gdamore/tcell/v2"
 
 // Tile identifies a sprite and its colors.
 // ID is the 1D index of the tile in the atlas (row-major, zero-based).
@@ -10,7 +10,7 @@ type Tile struct {
 	BG byte
 }
 
-var engineAtlas []termbox.Attribute
+var engineAtlas []tcell.Color
 var engineAtlasW int
 
 // engineTileW and engineTileH are the pixel dimensions of each tile.
@@ -19,12 +19,21 @@ var engineTileW, engineTileH int
 
 // tilePixels is a reusable scratch buffer for one tile's pixel data.
 // It grows as needed to fit the current tile size.
-var tilePixels []termbox.Attribute
+var tilePixels []tcell.Color
 
 // tileGrid is a flat row-major backing store for the tile grid.
 // tileGridW is its width in tiles; height is len(tileGrid)/tileGridW.
 var tileGrid []Tile
 var tileGridW int
+
+// paletteColor converts a 256-color palette index to a tcell color.
+// Index 0 means the terminal default color.
+func paletteColor(index byte) tcell.Color {
+	if index == 0 {
+		return tcell.ColorDefault
+	}
+	return tcell.PaletteColor(int(index))
+}
 
 // cellsPerTile returns the terminal cells a tile occupies on each axis.
 // Block octants pack 2×4 pixels into each cell.
@@ -35,7 +44,7 @@ func cellsPerTile() (tcw, tch int) {
 // InitTileGrid sizes the tile grid to match the current terminal dimensions.
 // Call on startup and after every resize.
 func InitTileGrid() {
-	var tw, th = termbox.Size()
+	var tw, th = screen.Size()
 	var tcw, tch = cellsPerTile()
 	var w, h = tw / tcw, th / tch
 	var need = w * h
@@ -60,22 +69,22 @@ func SetTile(col, row int, t Tile) {
 
 	var need = engineTileW * engineTileH
 	if cap(tilePixels) < need {
-		tilePixels = make([]termbox.Attribute, need)
+		tilePixels = make([]tcell.Color, need)
 	} else {
 		tilePixels = tilePixels[:need]
 	}
 
 	for y := range engineTileH {
 		for x := range engineTileW {
-			if engineAtlas[(srcY+y)*engineAtlasW+(srcX+x)] != termbox.ColorDefault {
-				tilePixels[y*engineTileW+x] = termbox.Attribute(t.FG)
+			if engineAtlas[(srcY+y)*engineAtlasW+(srcX+x)] != tcell.ColorDefault {
+				tilePixels[y*engineTileW+x] = paletteColor(t.FG)
 			} else {
-				tilePixels[y*engineTileW+x] = termbox.ColorDefault
+				tilePixels[y*engineTileW+x] = tcell.ColorDefault
 			}
 		}
 	}
 
-	BlitOctants(tilePixels, engineTileW, engineTileH, col*tcw, row*tch, termbox.Attribute(t.BG))
+	BlitOctants(tilePixels, engineTileW, engineTileH, col*tcw, row*tch, paletteColor(t.BG))
 
 	var idx = row*tileGridW + col
 	if idx >= 0 && idx < len(tileGrid) {
@@ -97,7 +106,7 @@ func ClearTile(col, row int) {
 	var tcw, tch = cellsPerTile()
 	for cy := range tch {
 		for cx := range tcw {
-			termbox.SetCell(col*tcw+cx, row*tch+cy, ' ', termbox.ColorDefault, termbox.ColorDefault)
+			screen.SetContent(col*tcw+cx, row*tch+cy, ' ', nil, tcell.StyleDefault)
 		}
 	}
 	var idx = row*tileGridW + col

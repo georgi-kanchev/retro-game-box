@@ -1,6 +1,6 @@
 package box
 
-import "github.com/nsf/termbox-go"
+import "github.com/gdamore/tcell/v2"
 
 // octantTable maps a 2×4 row-major 8-bit mask (0x00..0xFF) to its precise Unicode character.
 //
@@ -51,10 +51,10 @@ var octantTable = [256]rune{
 	'\U0001cde1', '\U0001cde2', '\U0000259f', '\U0001cde3', '\U00002586', '\U0001cde4', '\U0001cde5', '\U00002588',
 }
 
-// BlitOctants renders a flat row-major pixel array to the termbox backbuffer.
+// BlitOctants renders a flat row-major pixel array to the tcell backbuffer.
 // Each 2×4 block of pixels maps to one terminal cell as a block octant pattern.
-func BlitOctants(pixels []termbox.Attribute, width, height, offX, offY int, bg termbox.Attribute) {
-	var tw, th = termbox.Size()
+func BlitOctants(pixels []tcell.Color, width, height, offX, offY int, bg tcell.Color) {
+	var tw, th = screen.Size()
 	var cellCols, cellRows = (width + 1) / 2, (height + 3) / 4
 
 	for cy := range cellRows {
@@ -64,7 +64,7 @@ func BlitOctants(pixels []termbox.Attribute, width, height, offX, offY int, bg t
 			}
 			var px, py = cx * 2, cy * 4
 			var bitmask uint8
-			var fg = termbox.ColorDefault
+			var fg = tcell.ColorDefault
 
 			for row := range 4 {
 				for col := range 2 {
@@ -73,15 +73,15 @@ func BlitOctants(pixels []termbox.Attribute, width, height, offX, offY int, bg t
 						continue
 					}
 					var c = pixels[y*width+x]
-					if c != termbox.ColorDefault {
+					if c != tcell.ColorDefault {
 						bitmask |= 1 << (row*2 + col)
-						if fg == termbox.ColorDefault {
+						if fg == tcell.ColorDefault {
 							fg = c
 						}
 					}
 				}
 			}
-			termbox.SetCell(offX+cx, offY+cy, octantTable[bitmask], fg, bg)
+			screen.SetContent(offX+cx, offY+cy, octantTable[bitmask], nil, tcell.StyleDefault.Foreground(fg).Background(bg))
 		}
 	}
 }

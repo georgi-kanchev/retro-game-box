@@ -4,7 +4,7 @@ import (
 	"retro-game-box/box"
 	"time"
 
-	"github.com/nsf/termbox-go"
+	"github.com/gdamore/tcell/v2"
 )
 
 var lastRedraw = time.Now()
@@ -14,6 +14,7 @@ func main() {
 }
 
 func update() {
+	box.HideCursor()
 	if box.KeyPressed(box.KeyEsc) {
 		box.Quit()
 	}
@@ -32,7 +33,8 @@ func update() {
 	box.SetTile(0, 2, box.Tile{ID: 26, FG: 3, BG: 23})
 	box.SetTile(1, 2, box.Tile{ID: 27, FG: 4, BG: 24})
 
-	box.DrawString(0, 0, termbox.ColorWhite, termbox.ColorBlack, box.WriteStats())
-	box.DrawString(0, 1, termbox.ColorWhite|termbox.AttrBold, termbox.ColorBlack, box.WriteStats())
-	//box.DrawString(0, 1, termbox.ColorWhite, termbox.ColorBlack, box.WriteMemoryUsage())
+	var statsStyle = tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack)
+	box.DrawString(0, 0, statsStyle, box.WriteStats())
+	box.DrawString(0, 1, statsStyle.Bold(true), box.WriteStats())
+	//box.DrawString(0, 1, statsStyle, box.WriteMemoryUsage())
 }

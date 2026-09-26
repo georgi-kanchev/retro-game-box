@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/nsf/termbox-go"
+	"github.com/gdamore/tcell/v2"
 )
 
 // CurrentTPS is the measured ticks per second from the last completed second.
@@ -13,12 +13,19 @@ var CurrentTPS int
 // CurrentFPS is the measured frames drawn per second from the last completed second.
 var CurrentFPS int
 
+var screen tcell.Screen
 var dirty bool
 var quit bool
+var needSync bool
 var interval time.Duration
 var ticks, frames int
 var lastSecond time.Time
-var eventQueue chan termbox.Event
+var eventQueue chan tcell.Event
+
+// Screen returns the active tcell screen, or nil if the engine is not running.
+func Screen() tcell.Screen {
+	return screen
+}
 
 // Dirty marks the current tick as needing a screen flush.
 func Dirty() {
@@ -30,6 +37,20 @@ func Quit() {
 	quit = true
 }
 
+// HideCursor hides the terminal cursor.
+func HideCursor() {
+	if screen != nil {
+		screen.HideCursor()
+	}
+}
+
+// ShowCursor shows the terminal cursor at the given cell position.
+func ShowCursor(x, y int) {
+	if screen != nil {
+		screen.ShowCursor(x, y)
+	}
+}
+
 // Run starts the engine and blocks until completion.
 // tileW and tileH are the pixel dimensions of each tile in the atlas.
 func Run(tileW, tileH, tps int, atlasPath string, update func()) {
@@ -37,14 +58,22 @@ func Run(tileW, tileH, tps int, atlasPath string, update func()) {
 		fmt.Println("box: tile size must be positive")
 		return
 	}
-	if err := termbox.Init(); err != nil {
+	var s, err = tcell.NewScreen()
+	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	defer termbox.Close()
+	if err = s.Init(); err != nil {
+		fmt.Println(err)
+		return
+	}
+	screen = s
+	defer func() {
+		screen.Fini()
+		screen = nil
+	}()
 
-	termbox.SetInputMode(termbox.InputMouse)
-	termbox.SetOutputMode(termbox.Output256)
+	screen.EnableMouse()
 
 	engineTileW = tileW
 	engineTileH = tileH
@@ -55,10 +84,10 @@ func Run(tileW, tileH, tps int, atlasPath string, update func()) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	eventQueue = make(chan termbox.Event, 16)
+	eventQueue = make(chan tcell.Event, 16)
 	go func() {
 		for {
-			eventQueue <- termbox.PollEvent()
+			eventQueue <- screen.PollEvent()
 		}
 	}()
 
@@ -75,8 +104,13 @@ func Run(tileW, tileH, tps int, atlasPath string, update func()) {
 		update()
 
 		if dirty {
-			termbox.Flush()
-			termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+			if needSync {
+				screen.Sync()
+				needSync = false
+			} else {
+				screen.Show()
+			}
+			screen.Clear()
 			dirty = false
 			frames++
 		}
@@ -98,9 +132,13 @@ func drainEvents() {
 	for {
 		select {
 		case ev := <-eventQueue:
-			if ev.Type == termbox.EventResize {
+			if ev == nil {
+				continue
+			}
+			if _, ok := ev.(*tcell.EventResize); ok {
 				InitTileGrid()
 				dirty = true
+				needSync = true
 			}
 			processEvent(ev)
 		default:
@@ -109,7 +147,7 @@ func drainEvents() {
 	}
 }
 
-func DrawString(x, y int, fg, bg termbox.Attribute, msg []byte) {
+func DrawString(x, y int, style tcell.Style, msg []byte) {
 	var startX = x
 	for _, c := range msg {
 		if c == '\n' {
@@ -117,7 +155,7 @@ func DrawString(x, y int, fg, bg termbox.Attribute, msg []byte) {
 			x = startX
 			continue
 		}
-		termbox.SetCell(x, y, rune(c), fg, bg)
+		screen.SetContent(x, y, rune(c), nil, style)
 		x++
 	}
 }

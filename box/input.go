@@ -1,9 +1,9 @@
 package box
 
-import "github.com/nsf/termbox-go"
+import "github.com/gdamore/tcell/v2"
 
 // Key represents a keyboard key.
-type Key = termbox.Key
+type Key = tcell.Key
 
 // MouseBtn represents a mouse button.
 type MouseBtn int
@@ -18,32 +18,32 @@ const (
 
 // Keyboard key constants.
 const (
-	KeyEsc        = termbox.KeyEsc
-	KeyEnter      = termbox.KeyEnter
-	KeySpace      = termbox.KeySpace
-	KeyBackspace  = termbox.KeyBackspace2
-	KeyTab        = termbox.KeyTab
-	KeyArrowUp    = termbox.KeyArrowUp
-	KeyArrowDown  = termbox.KeyArrowDown
-	KeyArrowLeft  = termbox.KeyArrowLeft
-	KeyArrowRight = termbox.KeyArrowRight
-	KeyDelete     = termbox.KeyDelete
-	KeyHome       = termbox.KeyHome
-	KeyEnd        = termbox.KeyEnd
-	KeyPgUp       = termbox.KeyPgup
-	KeyPgDn       = termbox.KeyPgdn
-	KeyF1         = termbox.KeyF1
-	KeyF2         = termbox.KeyF2
-	KeyF3         = termbox.KeyF3
-	KeyF4         = termbox.KeyF4
-	KeyF5         = termbox.KeyF5
-	KeyF6         = termbox.KeyF6
-	KeyF7         = termbox.KeyF7
-	KeyF8         = termbox.KeyF8
-	KeyF9         = termbox.KeyF9
-	KeyF10        = termbox.KeyF10
-	KeyF11        = termbox.KeyF11
-	KeyF12        = termbox.KeyF12
+	KeyEsc        = tcell.KeyEsc
+	KeyEnter      = tcell.KeyEnter
+	KeySpace      = tcell.Key(' ')
+	KeyBackspace  = tcell.KeyBackspace2
+	KeyTab        = tcell.KeyTab
+	KeyArrowUp    = tcell.KeyUp
+	KeyArrowDown  = tcell.KeyDown
+	KeyArrowLeft  = tcell.KeyLeft
+	KeyArrowRight = tcell.KeyRight
+	KeyDelete     = tcell.KeyDelete
+	KeyHome       = tcell.KeyHome
+	KeyEnd        = tcell.KeyEnd
+	KeyPgUp       = tcell.KeyPgUp
+	KeyPgDn       = tcell.KeyPgDn
+	KeyF1         = tcell.KeyF1
+	KeyF2         = tcell.KeyF2
+	KeyF3         = tcell.KeyF3
+	KeyF4         = tcell.KeyF4
+	KeyF5         = tcell.KeyF5
+	KeyF6         = tcell.KeyF6
+	KeyF7         = tcell.KeyF7
+	KeyF8         = tcell.KeyF8
+	KeyF9         = tcell.KeyF9
+	KeyF10        = tcell.KeyF10
+	KeyF11        = tcell.KeyF11
+	KeyF12        = tcell.KeyF12
 )
 
 var pressedKeys [32]Key
@@ -62,33 +62,36 @@ func resetInput() {
 }
 
 // processEvent records input from ev into the per-tick input state.
-func processEvent(ev termbox.Event) {
-	switch ev.Type {
-	case termbox.EventKey:
-		if ev.Key != 0 {
+func processEvent(ev tcell.Event) {
+	switch ev := ev.(type) {
+	case *tcell.EventKey:
+		if ev.Key() != tcell.KeyRune {
 			if pressedKeyCount < len(pressedKeys) {
-				pressedKeys[pressedKeyCount] = ev.Key
+				pressedKeys[pressedKeyCount] = ev.Key()
 				pressedKeyCount++
 			}
-		} else if ev.Ch != 0 {
+		} else if ev.Rune() != 0 {
 			if pressedRuneCount < len(pressedRunes) {
-				pressedRunes[pressedRuneCount] = ev.Ch
+				pressedRunes[pressedRuneCount] = ev.Rune()
 				pressedRuneCount++
 			}
 		}
-	case termbox.EventMouse:
-		curMouseX = ev.MouseX
-		curMouseY = ev.MouseY
-		switch ev.Key {
-		case termbox.MouseLeft:
+	case *tcell.EventMouse:
+		curMouseX, curMouseY = ev.Position()
+		var btns = ev.Buttons()
+		if btns&tcell.Button1 != 0 {
 			pressedMouseBtns[MouseLeft] = true
-		case termbox.MouseRight:
+		}
+		if btns&tcell.Button2 != 0 {
 			pressedMouseBtns[MouseRight] = true
-		case termbox.MouseMiddle:
+		}
+		if btns&tcell.Button3 != 0 {
 			pressedMouseBtns[MouseMiddle] = true
-		case termbox.MouseWheelUp:
+		}
+		if btns&tcell.WheelUp != 0 {
 			pressedMouseBtns[MouseWheelUp] = true
-		case termbox.MouseWheelDown:
+		}
+		if btns&tcell.WheelDown != 0 {
 			pressedMouseBtns[MouseWheelDown] = true
 		}
 	}
