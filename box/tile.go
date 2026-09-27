@@ -13,9 +13,7 @@ type Tile struct {
 var engineAtlas []tcell.Color
 var engineAtlasW int
 
-// engineTileW and engineTileH are the pixel dimensions of each tile.
-// They are set by Run and may differ between runs.
-var engineTileW, engineTileH int
+var engineTileSize int
 
 // tilePixels is a reusable scratch buffer for one tile's pixel data.
 // It grows as needed to fit the current tile size.
@@ -38,7 +36,7 @@ func paletteColor(index byte) tcell.Color {
 // cellsPerTile returns the terminal cells a tile occupies on each axis.
 // Block octants pack 2×4 pixels into each cell.
 func cellsPerTile() (tcw, tch int) {
-	return (engineTileW + 1) / 2, (engineTileH + 3) / 4
+	return (engineTileSize + 1) / 2, (engineTileSize + 3) / 4
 }
 
 // InitTileGrid sizes the tile grid to match the current terminal dimensions.
@@ -60,31 +58,31 @@ func InitTileGrid() {
 // SetTile blits tile t from the atlas at tile grid position (col, row).
 func SetTile(col, row int, t Tile) {
 	var tcw, tch = cellsPerTile()
-	var tilesPerRow = engineAtlasW / engineTileW
+	var tilesPerRow = engineAtlasW / engineTileSize
 	if tilesPerRow <= 0 {
 		return
 	}
-	var srcX = (t.ID % tilesPerRow) * engineTileW
-	var srcY = (t.ID / tilesPerRow) * engineTileH
+	var srcX = (t.ID % tilesPerRow) * engineTileSize
+	var srcY = (t.ID / tilesPerRow) * engineTileSize
 
-	var need = engineTileW * engineTileH
+	var need = engineTileSize * engineTileSize
 	if cap(tilePixels) < need {
 		tilePixels = make([]tcell.Color, need)
 	} else {
 		tilePixels = tilePixels[:need]
 	}
 
-	for y := range engineTileH {
-		for x := range engineTileW {
+	for y := range engineTileSize {
+		for x := range engineTileSize {
 			if engineAtlas[(srcY+y)*engineAtlasW+(srcX+x)] != tcell.ColorDefault {
-				tilePixels[y*engineTileW+x] = paletteColor(t.FG)
+				tilePixels[y*engineTileSize+x] = paletteColor(t.FG)
 			} else {
-				tilePixels[y*engineTileW+x] = tcell.ColorDefault
+				tilePixels[y*engineTileSize+x] = tcell.ColorDefault
 			}
 		}
 	}
 
-	BlitOctants(tilePixels, engineTileW, engineTileH, col*tcw, row*tch, paletteColor(t.BG))
+	BlitOctants(tilePixels, engineTileSize, engineTileSize, col*tcw, row*tch, paletteColor(t.BG))
 
 	var idx = row*tileGridW + col
 	if idx >= 0 && idx < len(tileGrid) {

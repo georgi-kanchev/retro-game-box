@@ -1,137 +1,169 @@
 package box
 
 import (
+	"fmt"
+	"log"
+	"os"
+	"os/exec"
 	"runtime"
+	"runtime/pprof"
 	"strconv"
 	"time"
+	"unsafe"
 )
 
-var memStats runtime.MemStats
-var statsCacheBuf [4096]byte
-var statsCache []byte
-var lastStatsRefresh int64
-var statsBuf [64]byte
-
-// WriteMemoryUsage returns a formatted memory statistics report.
-// The report is cached and refreshed at most once per second.
-func WriteMemoryUsage() []byte {
-	now := time.Now().Unix()
-	if now-lastStatsRefresh < 1 { // 1 second threshold
-		return statsCache
-	}
+func WriteMemoryUsage() string {
+	// var now = time.Now().Unix()
+	// if now-lastStatsRefresh < 1 { // 1 second threshold
+	// 	return unsafe.String(unsafe.SliceData(memBuf), len(memBuf))
+	// }
 
 	runtime.ReadMemStats(&memStats)
-	lastStatsRefresh = now
-	statsCache = formatMemoryUsage(statsCacheBuf[:0])
-	return statsCache
-}
+	// lastStatsRefresh = now
 
-func formatMemoryUsage(buf []byte) []byte {
-	var m = &memStats
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	memBuf = memBuf[:0]
 
-	buf = append(buf, "Memory:\n"...)
-	buf = append(buf, "  UsedNow   = "...)
-	buf = AppendByteSize(buf, int(m.Alloc))
-	buf = append(buf, " (current heap in use)\n"...)
-	buf = append(buf, "  UsedTotal = "...)
-	buf = AppendByteSize(buf, int(m.TotalAlloc))
-	buf = append(buf, " (total allocated since start)\n"...)
-	buf = append(buf, "  FromOS    = "...)
-	buf = AppendByteSize(buf, int(m.Sys))
-	buf = append(buf, " (memory reserved from OS)\n"...)
+	memBuf = appendByteSize(memBuf, int(m.Sys))
+	memBuf = append(memBuf, " obtained from OS\n"...)
+	memBuf = appendByteSize(memBuf, int(m.HeapSys))
+	memBuf = append(memBuf, " heap obtained from OS\n"...)
+	memBuf = appendByteSize(memBuf, int(m.TotalAlloc))
+	memBuf = append(memBuf, " heap total (allocated since start)\n"...)
+	memBuf = appendByteSize(memBuf, int(m.HeapAlloc))
+	memBuf = append(memBuf, " heap live objects\n"...)
+	memBuf = appendByteSize(memBuf, int(m.HeapInuse))
+	memBuf = append(memBuf, " heap spans in use\n"...)
+	memBuf = appendByteSize(memBuf, int(m.HeapIdle))
+	memBuf = append(memBuf, " heap idle\n"...)
+	memBuf = appendByteSize(memBuf, int(m.HeapReleased))
+	memBuf = append(memBuf, " heap returned to OS\n"...)
+	memBuf = appendThousands(memBuf, m.Mallocs)
+	memBuf = append(memBuf, " heap objects total (allocated since start)\n"...)
+	memBuf = appendThousands(memBuf, m.HeapObjects)
+	memBuf = append(memBuf, " heap objects alive\n"...)
+	memBuf = appendThousands(memBuf, m.Frees)
+	memBuf = append(memBuf, " heap objects freed\n\n"...)
 
-	buf = append(buf, "\nHeap:\n"...)
-	buf = append(buf, "  Used      = "...)
-	buf = AppendByteSize(buf, int(m.HeapAlloc))
-	buf = append(buf, '\n')
-	buf = append(buf, "  Reserved  = "...)
-	buf = AppendByteSize(buf, int(m.HeapSys))
-	buf = append(buf, '\n')
-	buf = append(buf, "  Idle      = "...)
-	buf = AppendByteSize(buf, int(m.HeapIdle))
-	buf = append(buf, " (not used but still reserved)\n"...)
-	buf = append(buf, "  Active    = "...)
-	buf = AppendByteSize(buf, int(m.HeapInuse))
-	buf = append(buf, " (actively in use)\n"...)
-	buf = append(buf, "  Released  = "...)
-	buf = AppendByteSize(buf, int(m.HeapReleased))
-	buf = append(buf, " (given back to OS)\n"...)
+	memBuf = appendByteSize(memBuf, int(m.StackSys))
+	memBuf = append(memBuf, " stack obtained from OS\n"...)
+	memBuf = appendByteSize(memBuf, int(m.StackInuse))
+	memBuf = append(memBuf, " stack in use\n"...)
+	memBuf = appendByteSize(memBuf, int(m.OtherSys))
+	memBuf = append(memBuf, " misc runtime overhead\n\n"...)
 
-	buf = append(buf, "\nStack:\n"...)
-	buf = append(buf, "  Used      = "...)
-	buf = AppendByteSize(buf, int(m.StackInuse))
-	buf = append(buf, '\n')
-	buf = append(buf, "  Reserved  = "...)
-	buf = AppendByteSize(buf, int(m.StackSys))
-	buf = append(buf, '\n')
-	buf = append(buf, "  Other     = "...)
-	buf = AppendByteSize(buf, int(m.OtherSys))
-	buf = append(buf, " (misc runtime overhead)\n"...)
-
-	buf = append(buf, "\nObjects:\n"...)
-	buf = append(buf, "  Allocs    = "...)
-	buf = appendSeparateThousands(buf, m.Mallocs)
-	buf = append(buf, " (objects allocated)\n"...)
-	buf = append(buf, "  Frees     = "...)
-	buf = appendSeparateThousands(buf, m.Frees)
-	buf = append(buf, " (objects freed)\n"...)
-	buf = append(buf, "  Live      = "...)
-	buf = appendSeparateThousands(buf, m.HeapObjects)
-	buf = append(buf, " (currently alive)\n"...)
-
-	buf = append(buf, "\nGarbage Collection:\n"...)
-	buf = append(buf, "  Total     = "...)
-	buf = appendSeparateThousands(buf, uint64(m.NumGC))
-	buf = append(buf, " (total collections)\n"...)
-	buf = append(buf, "  Forced    = "...)
-	buf = strconv.AppendUint(buf, uint64(m.NumForcedGC), 10)
-	buf = append(buf, " (manual triggers)\n"...)
-	buf = append(buf, "  Next      = "...)
-	buf = AppendByteSize(buf, int(m.NextGC))
-	buf = append(buf, " (target heap size of next GC)\n"...)
-	buf = append(buf, "  PauseTotal= "...)
-	// m.PauseTotalNs is total nanoseconds. To get seconds with 2 decimals:
-	// (total / 1,000,000,000) * 100 / 100 => total / 10,000,000
-	// We do this to avoid floating point math entirely.
-	totalPauseSec100 := int64(m.PauseTotalNs / 10000000)
-	buf = appendFixedPoint(buf, totalPauseSec100)
-	buf = append(buf, " s (total time in GC)\n"...)
+	memBuf = appendThousands(memBuf, uint64(m.NumGC))
+	memBuf = append(memBuf, " GC total triggers\n"...)
+	memBuf = strconv.AppendUint(memBuf, uint64(m.NumForcedGC), 10)
+	memBuf = append(memBuf, " GC manual triggers\n"...)
+	memBuf = appendByteSize(memBuf, int(m.NextGC))
+	memBuf = append(memBuf, " GC next heap target\n"...)
+	memBuf = strconv.AppendFloat(memBuf, float64(m.PauseTotalNs)/1e9, 'f', 2, 64)
+	memBuf = append(memBuf, "s GC total time spent\n"...)
 	if m.LastGC == 0 {
-		buf = append(buf, "  SinceLast = never\n"...)
+		memBuf = append(memBuf, "GC never triggered\n"...)
 	} else {
-		buf = append(buf, "  SinceLast = "...)
-		nowNano := time.Now().UnixNano()
-		// Calculate seconds * 100 using integer math
-		diffSec100 := (nowNano - int64(m.LastGC)) / 10000000
-		buf = appendFixedPoint(buf, diffSec100)
-		buf = append(buf, " s\n"...)
+		memBuf = strconv.AppendFloat(memBuf, time.Since(time.Unix(0, int64(m.LastGC))).Seconds(), 'f', 1, 64)
+		memBuf = append(memBuf, "s GC since last trigger\n"...)
 	}
-
-	return buf
+	return unsafe.String(unsafe.SliceData(memBuf), len(memBuf))
+}
+func WriteFPS() string {
+	statsBuf = statsBuf[:0]
+	statsBuf = append(statsBuf, "FPS: "...)
+	statsBuf = strconv.AppendInt(statsBuf, int64(CurrentFPS), 10)
+	return unsafe.String(unsafe.SliceData(statsBuf), len(statsBuf))
 }
 
-// WriteStats returns a formatted "FPS: N  TPS: N" line using a package-level buffer.
-func WriteStats() []byte {
-	var b = AppendFPS(statsBuf[:0], CurrentFPS)
-	b = append(b, "  "...)
-	return AppendTPS(b, CurrentTPS)
+func ProfileAllocations(seconds float32) {
+	go func() {
+		var ts = time.Now().Format("2006-01-02_15-04-05")
+		var profileFile = fmt.Sprintf("allocs_%s.prof", ts)
+
+		log.Printf("Allocation profiling: capturing for %.2f seconds...\n", seconds)
+
+		var duration = time.Duration(float64(seconds) * float64(time.Second))
+		time.Sleep(duration)
+
+		runtime.GC() // flush pending frees so the snapshot is accurate
+
+		var f, err = os.Create(profileFile)
+		if err != nil {
+			log.Println("could not create allocs profile:", err)
+			return
+		}
+		defer f.Close()
+
+		if err := pprof.Lookup("allocs").WriteTo(f, 0); err != nil {
+			log.Println("could not write allocs profile:", err)
+			return
+		}
+
+		log.Println("Allocation profile saved at", profileFile)
+		log.Println("Opening browser at http://localhost:8081 ...")
+
+		exec.Command("go", "tool", "pprof", "-http=:8081", profileFile).Start()
+	}()
 }
 
-// AppendFPS appends "FPS: <n>" to buf.
-func AppendFPS(buf []byte, fps int) []byte {
-	buf = append(buf, "FPS: "...)
-	return strconv.AppendInt(buf, int64(fps), 10)
+// private ========================================================
+
+var memStats runtime.MemStats
+var memBuf []byte
+var lastStatsRefresh int64
+var statsBuf []byte
+
+func formatMemoryUsage() {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	memBuf = memBuf[:0]
+
+	memBuf = appendByteSize(memBuf, int(m.Sys))
+	memBuf = append(memBuf, " obtained from OS\n"...)
+	memBuf = appendByteSize(memBuf, int(m.HeapSys))
+	memBuf = append(memBuf, " heap obtained from OS\n"...)
+	memBuf = appendByteSize(memBuf, int(m.TotalAlloc))
+	memBuf = append(memBuf, " heap total (allocated since start)\n"...)
+	memBuf = appendByteSize(memBuf, int(m.HeapAlloc))
+	memBuf = append(memBuf, " heap live objects\n"...)
+	memBuf = appendByteSize(memBuf, int(m.HeapInuse))
+	memBuf = append(memBuf, " heap spans in use\n"...)
+	memBuf = appendByteSize(memBuf, int(m.HeapIdle))
+	memBuf = append(memBuf, " heap idle\n"...)
+	memBuf = appendByteSize(memBuf, int(m.HeapReleased))
+	memBuf = append(memBuf, " heap returned to OS\n"...)
+	memBuf = appendThousands(memBuf, m.Mallocs)
+	memBuf = append(memBuf, " heap objects total (allocated since start)\n"...)
+	memBuf = appendThousands(memBuf, m.HeapObjects)
+	memBuf = append(memBuf, " heap objects alive\n"...)
+	memBuf = appendThousands(memBuf, m.Frees)
+	memBuf = append(memBuf, " heap objects freed\n\n"...)
+
+	memBuf = appendByteSize(memBuf, int(m.StackSys))
+	memBuf = append(memBuf, " stack obtained from OS\n"...)
+	memBuf = appendByteSize(memBuf, int(m.StackInuse))
+	memBuf = append(memBuf, " stack in use\n"...)
+	memBuf = appendByteSize(memBuf, int(m.OtherSys))
+	memBuf = append(memBuf, " misc runtime overhead\n\n"...)
+
+	memBuf = appendThousands(memBuf, uint64(m.NumGC))
+	memBuf = append(memBuf, " GC total triggers\n"...)
+	memBuf = strconv.AppendUint(memBuf, uint64(m.NumForcedGC), 10)
+	memBuf = append(memBuf, " GC manual triggers\n"...)
+	memBuf = appendByteSize(memBuf, int(m.NextGC))
+	memBuf = append(memBuf, " GC next heap target\n"...)
+	memBuf = strconv.AppendFloat(memBuf, float64(m.PauseTotalNs)/1e9, 'f', 2, 64)
+	memBuf = append(memBuf, "s GC total time spent\n"...)
+	if m.LastGC == 0 {
+		memBuf = append(memBuf, "GC never triggered\n"...)
+	} else {
+		memBuf = strconv.AppendFloat(memBuf, time.Since(time.Unix(0, int64(m.LastGC))).Seconds(), 'f', 1, 64)
+		memBuf = append(memBuf, "s GC since last trigger\n"...)
+	}
 }
 
-// AppendTPS appends "TPS: <n>" to buf.
-func AppendTPS(buf []byte, tps int) []byte {
-	buf = append(buf, "TPS: "...)
-	return strconv.AppendInt(buf, int64(tps), 10)
-}
-
-// AppendByteSize appends a human-readable byte size (e.g. "1.500 KB") to buf.
-// Optimized for zero-allocations and avoids floating point math.
-func AppendByteSize(buf []byte, n int) []byte {
+func appendByteSize(buf []byte, n int) []byte {
 	const unit = 1024
 	if n < unit {
 		buf = strconv.AppendInt(buf, int64(n), 10)
@@ -171,8 +203,7 @@ func AppendByteSize(buf []byte, n int) []byte {
 	buf = append(buf, "KMGTPE"[exp])
 	return append(buf, 'B')
 }
-
-func appendSeparateThousands(buf []byte, n uint64) []byte {
+func appendThousands(buf []byte, n uint64) []byte {
 	var tmp [24]byte
 	var digits = strconv.AppendUint(tmp[:0], n, 10)
 	var l = len(digits)
@@ -184,9 +215,6 @@ func appendSeparateThousands(buf []byte, n uint64) []byte {
 	}
 	return buf
 }
-
-// appendFixedPoint takes a value representing (seconds * 100)
-// and appends it to buf as "seconds.hundredths"
 func appendFixedPoint(buf []byte, v100 int64) []byte {
 	whole := v100 / 100
 	frac := v100 % 100

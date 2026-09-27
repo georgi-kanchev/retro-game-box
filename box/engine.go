@@ -7,9 +7,6 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
-// CurrentTPS is the measured ticks per second from the last completed second.
-var CurrentTPS int
-
 // CurrentFPS is the measured frames drawn per second from the last completed second.
 var CurrentFPS int
 
@@ -21,16 +18,6 @@ var interval time.Duration
 var ticks, frames int
 var lastSecond time.Time
 var eventQueue chan tcell.Event
-
-// Screen returns the active tcell screen, or nil if the engine is not running.
-func Screen() tcell.Screen {
-	return screen
-}
-
-// Dirty marks the current tick as needing a screen flush.
-func Dirty() {
-	dirty = true
-}
 
 // Quit signals the engine to stop after the current tick.
 func Quit() {
@@ -53,11 +40,7 @@ func ShowCursor(x, y int) {
 
 // Run starts the engine and blocks until completion.
 // tileW and tileH are the pixel dimensions of each tile in the atlas.
-func Run(tileW, tileH, tps int, atlasPath string, update func()) {
-	if tileW <= 0 || tileH <= 0 {
-		fmt.Println("box: tile size must be positive")
-		return
-	}
+func Run(tileSize, tps int, atlasPath string, update func()) {
 	var s, err = tcell.NewScreen()
 	if err != nil {
 		fmt.Println(err)
@@ -75,13 +58,12 @@ func Run(tileW, tileH, tps int, atlasPath string, update func()) {
 
 	screen.EnableMouse()
 
-	engineTileW = tileW
-	engineTileH = tileH
+	engineTileSize = tileSize
 	engineAtlas, engineAtlasW, _ = LoadPNG(atlasPath)
 	InitTileGrid()
 
 	interval = time.Second / time.Duration(tps)
-	ticker := time.NewTicker(interval)
+	var ticker = time.NewTicker(interval)
 	defer ticker.Stop()
 
 	eventQueue = make(chan tcell.Event, 16)
@@ -94,14 +76,14 @@ func Run(tileW, tileH, tps int, atlasPath string, update func()) {
 	lastSecond = time.Now()
 
 	for range ticker.C {
-		now := time.Now()
+		var now = time.Now()
 		ticks++
 
 		clearInput()
 		drainEvents()
-
-		// Logic update
 		update()
+
+		dirty = true
 
 		if dirty {
 			if needSync {
@@ -116,7 +98,6 @@ func Run(tileW, tileH, tps int, atlasPath string, update func()) {
 		}
 
 		if now.Sub(lastSecond) >= time.Second {
-			CurrentTPS = ticks
 			CurrentFPS = frames
 			ticks, frames = 0, 0
 			lastSecond = now
@@ -147,7 +128,7 @@ func drainEvents() {
 	}
 }
 
-func DrawString(x, y int, style tcell.Style, msg []byte) {
+func DrawString(x, y int, style tcell.Style, msg string) {
 	var startX = x
 	for _, c := range msg {
 		if c == '\n' {
